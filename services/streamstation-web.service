@@ -1,0 +1,18 @@
+[Unit]
+Description=StreamStation Web Server
+After=network.target streamstation.service
+Wants=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/opt/streamstation
+ExecStart=/opt/streamstation/venv/bin/python3 /opt/streamstation/web/app.py --host 0.0.0.0 --port 8080
+Restart=on-failure
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=streamstation-web
+
+[Install]
+WantedBy=multi-user.target

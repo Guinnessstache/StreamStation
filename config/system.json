@@ -1,0 +1,28 @@
+{
+  "_comment": "StreamStation system configuration — edit via web UI or directly",
+
+  "volume": 80,
+  "fullscreen": true,
+  "buffer_seconds": 10,
+  "stream_retries": 3,
+  "retry_delay_seconds": 5,
+  "startup_channel": 2,
+  "video_output": "",
+
+  "web": {
+    "host": "0.0.0.0",
+    "port": 8080
+  },
+
+  "hardware": {
+    "display_type": "tm1637",
+    "tm1637_clk": 23,
+    "tm1637_dio": 24,
+    "tm1637_brightness": 3,
+    "lcd_address": "0x27",
+    "lcd_cols": 16,
+    "lcd_rows": 2,
+    "keypad_rows": [5, 6, 13, 19],
+    "keypad_cols": [12, 16, 20, 21]
+  }
+}

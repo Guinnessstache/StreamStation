@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<title>StreamStation Remote</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/remote.css">
+</head>
+<body>
+
+<div class="remote-body">
+
+  <!-- TOP DISPLAY -->
+  <div class="remote-top">
+    <div class="brand-strip">STREAMSTATION</div>
+    <div class="channel-display" id="channelDisplay">
+      <div class="display-screen">
+        <div class="display-label">CHANNEL</div>
+        <div class="display-number" id="displayNumber">
+          {% if status.channel %}{{ '%02d'|format(status.channel) }}{% else %}--{% endif %}
+        </div>
+        <div class="display-name" id="displayName">
+          {{ status.name or 'NO SIGNAL' }}
+        </div>
+      </div>
+      <div class="display-indicators">
+        <div class="indicator {% if engine_running %}active{% endif %}" id="powerIndicator">PWR</div>
+        <div class="indicator" id="signalIndicator">SIG</div>
+        <div class="indicator" id="muteIndicator">MUTE</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- POWER + INPUT ROW -->
+  <div class="btn-row">
+    <button class="rmt-btn red-btn" id="powerBtn" title="Toggle engine">⏻ POWER</button>
+    <button class="rmt-btn grey-btn" id="lastChBtn" title="Last channel">↩ LAST</button>
+  </div>
+
+  <!-- CHANNEL UP/DOWN + VOLUME -->
+  <div class="ctrl-cross">
+    <div class="cross-col">
+      <div class="cross-label">CH</div>
+      <button class="rmt-btn channel-btn" id="chUpBtn">▲</button>
+      <button class="rmt-btn channel-btn" id="chDownBtn">▼</button>
+    </div>
+    <div class="cross-center"></div>
+    <div class="cross-col">
+      <div class="cross-label">VOL</div>
+      <button class="rmt-btn channel-btn" id="volUpBtn">＋</button>
+      <button class="rmt-btn channel-btn" id="volDownBtn">－</button>
+    </div>
+  </div>
+
+  <!-- MUTE + INFO -->
+  <div class="btn-row">
+    <button class="rmt-btn grey-btn" id="muteBtn">🔇 MUTE</button>
+    <button class="rmt-btn grey-btn" id="infoBtn">ℹ INFO</button>
+  </div>
+
+  <!-- NUMBER PAD -->
+  <div class="numpad" id="numpad">
+    <button class="num-btn" data-digit="1">1</button>
+    <button class="num-btn" data-digit="2">2 <span>ABC</span></button>
+    <button class="num-btn" data-digit="3">3 <span>DEF</span></button>
+    <button class="num-btn" data-digit="4">4 <span>GHI</span></button>
+    <button class="num-btn" data-digit="5">5 <span>JKL</span></button>
+    <button class="num-btn" data-digit="6">6 <span>MNO</span></button>
+    <button class="num-btn" data-digit="7">7 <span>PQRS</span></button>
+    <button class="num-btn" data-digit="8">8 <span>TUV</span></button>
+    <button class="num-btn" data-digit="9">9 <span>WXYZ</span></button>
+    <button class="num-btn star-btn" data-digit="*">⏮</button>
+    <button class="num-btn" data-digit="0">0</button>
+    <button class="num-btn hash-btn" data-digit="#">⏭</button>
+  </div>
+
+  <!-- CATEGORY QUICK JUMP -->
+  <div class="cat-section">
+    <div class="cat-label">QUICK JUMP</div>
+    <div class="cat-btns" id="catBtns">
+      {% for cat in categories %}
+      <button class="cat-jump-btn" data-cat="{{ cat }}">{{ cat }}</button>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- CHANNEL LIST DRAWER -->
+  <div class="ch-drawer" id="chDrawer">
+    <div class="drawer-handle" id="drawerHandle">▲ CHANNEL LIST</div>
+    <div class="drawer-content" id="drawerContent">
+      {% for ch in channels %}
+      <button class="drawer-ch-btn {% if status.channel == ch.number %}active{% endif %}"
+              data-num="{{ ch.number }}">
+        <span class="drawer-num">{{ ch.number }}</span>
+        <span class="drawer-name">{{ ch.name }}</span>
+        <span class="drawer-cat">{{ ch.category }}</span>
+      </button>
+      {% endfor %}
+    </div>
+  </div>
+
+</div>
+
+<!-- Entry overlay: multi-digit channel entry -->
+<div class="entry-overlay" id="entryOverlay">
+  <div class="entry-display" id="entryDisplay">--</div>
+  <div class="entry-hint">ENTER CHANNEL NUMBER</div>
+  <div class="entry-timer-bar"><div class="entry-timer-fill" id="entryTimerFill"></div></div>
+</div>
+
+<!-- Info overlay -->
+<div class="info-overlay" id="infoOverlay">
+  <div class="info-box">
+    <div class="info-ch" id="infoCh">CH --</div>
+    <div class="info-name" id="infoName">NO SIGNAL</div>
+    <div class="info-cat" id="infoCat"></div>
+    <div class="info-close" id="infoClose">TAP TO CLOSE</div>
+  </div>
+</div>
+
+<script>
+  // Pass server-side data to JS
+  const CHANNELS = {{ channels | tojson }};
+  const CATEGORIES = {{ categories | tojson }};
+</script>
+<script src="/static/js/remote.js"></script>
+</body>
+</html>

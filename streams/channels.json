@@ -1,0 +1,71 @@
+{
+  "categories": [
+    "News",
+    "Sports",
+    "Entertainment",
+    "Weather",
+    "Local",
+    "Movies",
+    "Music",
+    "Kids",
+    "Documentary",
+    "Uncategorized"
+  ],
+  "channels": [
+    {
+      "id": 1,
+      "number": 2,
+      "name": "NASA TV",
+      "category": "Documentary",
+      "url": "https://ntv1.akamaized.net/hls/live/2014075/NASA-NTV1-HLS/master.m3u8",
+      "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e5/NASA_logo.svg/64px-NASA_logo.svg.png",
+      "enabled": true,
+      "notes": "Official NASA Television - free 24/7 stream",
+      "added_at": "2025-01-01T00:00:00"
+    },
+    {
+      "id": 2,
+      "number": 4,
+      "name": "Bloomberg TV",
+      "category": "News",
+      "url": "https://www.youtube.com/watch?v=dp8PhLsUcFE",
+      "logo": "",
+      "enabled": true,
+      "notes": "Bloomberg live news (YouTube - requires yt-dlp)",
+      "added_at": "2025-01-01T00:00:00"
+    },
+    {
+      "id": 3,
+      "number": 7,
+      "name": "Al Jazeera English",
+      "category": "News",
+      "url": "https://live-hls-web-aje.getaj.net/AJE/03.m3u8",
+      "logo": "",
+      "enabled": true,
+      "notes": "Al Jazeera English 24/7 live stream",
+      "added_at": "2025-01-01T00:00:00"
+    },
+    {
+      "id": 4,
+      "number": 12,
+      "name": "France 24 English",
+      "category": "News",
+      "url": "https://static.france24.com/live/F24_EN_LO_HLS/live_web.m3u8",
+      "logo": "",
+      "enabled": true,
+      "notes": "France 24 English international news",
+      "added_at": "2025-01-01T00:00:00"
+    },
+    {
+      "id": 5,
+      "number": 20,
+      "name": "DW English",
+      "category": "News",
+      "url": "https://dwamdstream102.akamaized.net/hls/live/2015525/dwstream102/index.m3u8",
+      "logo": "",
+      "enabled": true,
+      "notes": "Deutsche Welle English news",
+      "added_at": "2025-01-01T00:00:00"
+    }
+  ]
+}

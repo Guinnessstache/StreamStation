@@ -1,0 +1,18 @@
+[Unit]
+Description=StreamStation Hardware Keypad Driver
+After=streamstation.service
+BindsTo=streamstation.service
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/opt/streamstation
+ExecStart=/opt/streamstation/venv/bin/python3 /opt/streamstation/hardware/keypad.py
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=streamstation-keypad
+
+[Install]
+WantedBy=multi-user.target
