@@ -5,19 +5,25 @@ Serves the management UI, TV guide, phone remote, and REST API.
 """
 
 import os
+import sys
 import json
 import socket
 import logging
+import threading
 import subprocess
 from pathlib import Path
 from datetime import datetime
 from functools import wraps
+
+# Add parent dir to path so we can import updater.py
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from flask import (
     Flask, render_template, jsonify, request,
     redirect, url_for, send_from_directory
 )
 from flask_socketio import SocketIO, emit
+import updater as _updater
 
 # ── Paths ────────────────────────────────────────────────────────────────────
 BASE_DIR       = Path(__file__).parent.parent
@@ -32,6 +38,9 @@ app.secret_key = os.urandom(24)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
 log = logging.getLogger("streamstation.web")
+
+# Start auto-updater background checker
+_updater.start_background_checker()
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -109,6 +118,7 @@ def manage():
         status=status,
         config=config,
         engine_running=engine_running(),
+        update_state=_updater.get_state(),
     )
 
 
@@ -434,6 +444,43 @@ def api_test_stream():
     except Exception as e:
         reachable = False
     return jsonify({"ok": reachable, "url": url})
+
+
+# ── REST API: Auto-Updater ────────────────────────────────────────────────────
+
+@app.route("/api/update/status", methods=["GET"])
+def api_update_status():
+    return jsonify(_updater.get_state())
+
+
+@app.route("/api/update/check", methods=["POST"])
+def api_update_check():
+    """Trigger an immediate update check (non-blocking, returns current state)."""
+    def _do_check():
+        _updater.check_for_update()
+    threading.Thread(target=_do_check, daemon=True).start()
+    return jsonify({"ok": True, "message": "Check started"})
+
+
+@app.route("/api/update/install", methods=["POST"])
+def api_update_install():
+    """
+    Download and install the latest release.
+    Runs in background; poll /api/update/status for progress.
+    """
+    state = _updater.get_state()
+    if state["installing"]:
+        return jsonify({"ok": False, "error": "Install already in progress"}), 409
+    if not state["update_available"]:
+        return jsonify({"ok": False, "error": "No update available"}), 400
+
+    messages = []
+
+    def _do_install():
+        _updater.install_update(progress_cb=lambda m: messages.append(m))
+
+    threading.Thread(target=_do_install, daemon=True).start()
+    return jsonify({"ok": True, "message": "Install started"})
 
 
 # ── WebSocket ─────────────────────────────────────────────────────────────────

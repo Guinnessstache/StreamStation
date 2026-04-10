@@ -236,3 +236,108 @@ async function pollStatus() {
   } catch {}
 }
 setInterval(pollStatus, 5000);
+
+// ── Auto-Updater ──────────────────────────────────────────────────────────────
+
+// Check for updates button
+const checkUpdateBtn = $('checkUpdateBtn');
+if (checkUpdateBtn) {
+  checkUpdateBtn.addEventListener('click', async () => {
+    checkUpdateBtn.textContent = '⏳ CHECKING…';
+    checkUpdateBtn.disabled = true;
+    await api('POST', '/api/update/check');
+    // Poll until checking is done
+    const poll = setInterval(async () => {
+      const s = await fetch('/api/update/status').then(r => r.json());
+      if (!s.checking) {
+        clearInterval(poll);
+        checkUpdateBtn.disabled = false;
+        if (s.update_available) {
+          checkUpdateBtn.textContent = '⬆ UPDATE AVAILABLE';
+          toast(`Update available: ${s.latest_version}`, 'ok');
+          setTimeout(() => location.reload(), 1000);
+        } else if (s.error) {
+          checkUpdateBtn.textContent = '↺ CHECK FOR UPDATES';
+          toast(`Check failed: ${s.error}`, 'error');
+        } else {
+          checkUpdateBtn.textContent = '✓ UP TO DATE';
+          toast('StreamStation is up to date.');
+          setTimeout(() => { checkUpdateBtn.textContent = '↺ CHECK FOR UPDATES'; }, 3000);
+        }
+      }
+    }, 1500);
+  });
+}
+
+// Dismiss banner
+const dismissBanner = $('dismissBanner');
+if (dismissBanner) {
+  dismissBanner.addEventListener('click', () => {
+    $('updateBanner').style.display = 'none';
+    const notes = $('updateNotes');
+    if (notes) notes.style.display = 'none';
+  });
+}
+
+// Toggle release notes
+const toggleNotes = $('toggleNotes');
+if (toggleNotes) {
+  toggleNotes.addEventListener('click', () => {
+    const notes = $('updateNotes');
+    if (!notes) return;
+    notes.classList.toggle('open');
+    toggleNotes.textContent = notes.classList.contains('open') ? '▴ NOTES' : '▾ NOTES';
+  });
+}
+
+// Install button
+const installBtn = $('installBtn');
+if (installBtn) {
+  installBtn.addEventListener('click', async () => {
+    if (!confirm('Install the update now? StreamStation will restart automatically.')) return;
+
+    // Show progress modal
+    $('updateModal').classList.add('open');
+    installBtn.disabled = true;
+
+    const r = await api('POST', '/api/update/install');
+    if (!r.ok) {
+      $('updateResult').textContent = `✗ ${r.error}`;
+      $('updateResult').className = 'test-result err';
+      $('updateModal').classList.remove('open');
+      toast(r.error, 'error');
+      installBtn.disabled = false;
+      return;
+    }
+
+    // Poll install status
+    const msgEl = $('updateProgressMsg');
+    const resultEl = $('updateResult');
+    let lastMsg = '';
+
+    const poll = setInterval(async () => {
+      const s = await fetch('/api/update/status').then(r => r.json()).catch(() => null);
+      if (!s) return;
+
+      if (s.install_message && s.install_message !== lastMsg) {
+        lastMsg = s.install_message;
+        msgEl.textContent = s.install_message;
+      }
+
+      if (!s.installing) {
+        clearInterval(poll);
+        if (s.install_status === 'ok') {
+          msgEl.textContent = '✓ Update installed!';
+          resultEl.textContent = 'Restarting… page will reload shortly.';
+          resultEl.className = 'test-result ok';
+          setTimeout(() => location.reload(), 6000);
+        } else {
+          msgEl.textContent = '✗ Install failed';
+          resultEl.textContent = s.install_message || 'Unknown error';
+          resultEl.className = 'test-result err';
+          installBtn.disabled = false;
+        }
+      }
+    }, 2000);
+  });
+}

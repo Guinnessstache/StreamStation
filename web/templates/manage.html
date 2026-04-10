@@ -34,6 +34,51 @@
   </div>
 </nav>
 
+<!-- UPDATE BANNER -->
+{% if update_state.update_available %}
+<div class="update-banner" id="updateBanner">
+  <div class="update-banner-left">
+    <span class="update-icon">⬆</span>
+    <span class="update-text">
+      UPDATE AVAILABLE — <strong>{{ update_state.latest_version }}</strong>
+      {% if update_state.release_notes %}
+      <span class="update-notes-toggle" id="toggleNotes">▾ NOTES</span>
+      {% endif %}
+    </span>
+  </div>
+  <div class="update-banner-right">
+    {% if update_state.release_url %}
+    <a class="update-link-btn" href="{{ update_state.release_url }}" target="_blank">VIEW ON GITHUB</a>
+    {% endif %}
+    {% if update_state.asset_url %}
+    <button class="update-install-btn" id="installBtn">INSTALL NOW</button>
+    {% endif %}
+    <button class="update-dismiss-btn" id="dismissBanner">✕</button>
+  </div>
+</div>
+{% if update_state.release_notes %}
+<div class="update-notes" id="updateNotes">
+  <pre class="update-notes-body">{{ update_state.release_notes }}</pre>
+</div>
+{% endif %}
+{% endif %}
+
+<!-- UPDATE PROGRESS MODAL -->
+<div class="modal-overlay" id="updateModal">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h3>INSTALLING UPDATE</h3>
+    </div>
+    <div class="modal-body">
+      <div class="update-progress-wrap">
+        <div class="update-spinner"></div>
+        <div id="updateProgressMsg" class="update-progress-msg">Preparing download…</div>
+      </div>
+      <div id="updateResult" class="test-result" style="margin-top:12px;"></div>
+    </div>
+  </div>
+</div>
+
 <!-- MAIN -->
 <main class="main-layout">
 
@@ -63,7 +108,19 @@
         {% if status.channel %}
         <div class="sys-row"><span>On Air</span><span class="sys-val green">CH {{ status.channel }}</span></div>
         {% endif %}
+        <div class="sys-row"><span>Version</span><span class="sys-val" id="localVersion">{{ update_state.local_version }}</span></div>
+        {% if update_state.update_available %}
+        <div class="sys-row"><span>Latest</span><span class="sys-val" style="color:var(--amber)">{{ update_state.latest_version }}</span></div>
+        {% endif %}
       </div>
+      <button class="action-btn" id="checkUpdateBtn" style="margin-top:8px;">
+        {% if update_state.checking %}⏳ CHECKING…{% else %}↺ CHECK FOR UPDATES{% endif %}
+      </button>
+      {% if update_state.last_checked %}
+      <div style="font-size:10px;color:var(--text-muted);padding:4px 10px;">
+        Last checked: {{ update_state.last_checked[:16]|replace('T',' ') }}
+      </div>
+      {% endif %}
     </div>
   </aside>
 

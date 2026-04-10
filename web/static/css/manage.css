@@ -385,3 +385,130 @@
   text-shadow: var(--glow);
 }
 .btn-save:hover { background: var(--green); color: var(--bg); box-shadow: var(--glow-strong); }
+
+/* ── Update Banner ── */
+.update-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(90deg, rgba(255,170,0,0.12), rgba(255,170,0,0.06));
+  border-bottom: 1px solid var(--amber);
+  padding: 9px 24px;
+  gap: 12px;
+  flex-shrink: 0;
+  animation: bannerPulse 3s ease-in-out infinite;
+}
+@keyframes bannerPulse {
+  0%, 100% { border-bottom-color: var(--amber); }
+  50%       { border-bottom-color: rgba(255,170,0,0.4); }
+}
+
+.update-banner-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: var(--amber);
+}
+.update-icon { font-size: 16px; }
+.update-text strong { font-size: 15px; }
+
+.update-notes-toggle {
+  font-size: 11px;
+  color: var(--text-dim);
+  cursor: pointer;
+  border-bottom: 1px dashed var(--text-muted);
+  margin-left: 8px;
+  letter-spacing: 1px;
+}
+.update-notes-toggle:hover { color: var(--amber); }
+
+.update-banner-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.update-link-btn {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: var(--text-dim);
+  text-decoration: none;
+  border: 1px solid var(--border);
+  padding: 4px 12px;
+  border-radius: var(--radius);
+  transition: all 0.12s;
+}
+.update-link-btn:hover { color: var(--amber); border-color: var(--amber); }
+
+.update-install-btn {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  color: var(--bg);
+  background: var(--amber);
+  border: none;
+  padding: 5px 16px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all 0.12s;
+  box-shadow: 0 0 12px rgba(255,170,0,0.4);
+}
+.update-install-btn:hover { background: #ffc933; box-shadow: 0 0 20px rgba(255,170,0,0.7); }
+.update-install-btn:disabled { opacity: 0.5; cursor: default; }
+
+.update-dismiss-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: var(--radius);
+}
+.update-dismiss-btn:hover { color: var(--red); }
+
+.update-notes {
+  display: none;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 24px;
+}
+.update-notes.open { display: block; }
+.update-notes-body {
+  font-size: 12px;
+  color: var(--text-dim);
+  white-space: pre-wrap;
+  max-height: 160px;
+  overflow-y: auto;
+  font-family: var(--font-mono);
+}
+
+/* ── Update Progress Modal ── */
+.update-progress-wrap {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.update-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border);
+  border-top-color: var(--amber);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.update-progress-msg {
+  font-size: 13px;
+  color: var(--amber);
+  font-family: var(--font-mono);
+}
