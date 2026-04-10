@@ -2,12 +2,22 @@
 """
 StreamStation - Main Channel Engine
 Manages live stream playback via MPV and handles channel switching.
+
+Supports retrotv_playlist channels that simulate a live broadcast:
+  - Videos are shuffled once per day using a seed derived from today's date
+    + channel number, so everyone watching the same channel sees the same
+    order (consistent broadcast feel), but it refreshes each morning.
+  - The engine figures out which video is "on air" right now and seeks into
+    it, exactly like MyRetroTVs — you tune in mid-show, not at the start.
+  - When the current video ends MPV advances to the next in the shuffled queue.
+  - Durations are cached to disk so repeat tunes are instant.
 """
 
 import os
 import sys
 import json
 import time
+import random
 import signal
 import socket
 import logging
@@ -15,18 +25,20 @@ import argparse
 import subprocess
 import threading
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, date
 
 # ── Paths ────────────────────────────────────────────────────────────────────
-BASE_DIR       = Path(__file__).parent
-CHANNELS_FILE  = BASE_DIR / "streams" / "channels.json"
-CONFIG_FILE    = BASE_DIR / "config" / "system.json"
-RUNTIME_DIR    = BASE_DIR / "runtime"
-STATUS_FILE    = RUNTIME_DIR / "current_channel.json"
-CONTROL_SOCKET = RUNTIME_DIR / "control.socket"
-LOG_FILE       = RUNTIME_DIR / "streamstation.log"
-STATIC_DIR     = BASE_DIR / "web" / "static"
-SIGNAL_VIDEO   = STATIC_DIR / "img" / "no_signal.mp4"
+BASE_DIR            = Path(__file__).parent
+CHANNELS_FILE       = BASE_DIR / "streams" / "channels.json"
+CONFIG_FILE         = BASE_DIR / "config" / "system.json"
+RUNTIME_DIR         = BASE_DIR / "runtime"
+STATUS_FILE         = RUNTIME_DIR / "current_channel.json"
+CONTROL_SOCKET      = RUNTIME_DIR / "control.socket"
+LOG_FILE            = RUNTIME_DIR / "streamstation.log"
+STATIC_DIR          = BASE_DIR / "web" / "static"
+SIGNAL_VIDEO        = STATIC_DIR / "img" / "no_signal.mp4"
+PLAYLIST_DIR        = RUNTIME_DIR / "playlists"
+DURATION_CACHE_FILE = RUNTIME_DIR / "retrotv_durations.json"
 
 # ── Logging ──────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -50,18 +62,214 @@ def save_json(path, data):
         json.dump(data, f, indent=2)
 
 
+# ── RetroTV: Duration Cache ───────────────────────────────────────────────────
+
+_duration_cache: dict = {}
+_cache_lock = threading.Lock()
+
+
+def _load_duration_cache():
+    global _duration_cache
+    try:
+        if DURATION_CACHE_FILE.exists():
+            with open(DURATION_CACHE_FILE) as f:
+                _duration_cache = json.load(f)
+            log.info(f"RetroTV: loaded {len(_duration_cache)} cached durations")
+    except Exception as e:
+        log.warning(f"RetroTV: could not load duration cache: {e}")
+
+
+def _save_duration_cache():
+    try:
+        PLAYLIST_DIR.mkdir(parents=True, exist_ok=True)
+        with open(DURATION_CACHE_FILE, "w") as f:
+            json.dump(_duration_cache, f)
+    except Exception as e:
+        log.warning(f"RetroTV: could not save duration cache: {e}")
+
+
+def _fetch_duration(video_id: str) -> float:
+    """
+    Return duration in seconds for a YouTube video ID.
+    Checks the in-memory cache first, then calls yt-dlp.
+    Returns 0.0 on failure (video is skipped in broadcast calc).
+    """
+    with _cache_lock:
+        if video_id in _duration_cache:
+            return _duration_cache[video_id]
+
+    url = f"https://www.youtube.com/watch?v={video_id}"
+    secs = 0.0
+
+    # Fast path: --print duration (yt-dlp >= 2021.12)
+    try:
+        r = subprocess.run(
+            ["yt-dlp", "--no-playlist", "--print", "duration", url],
+            capture_output=True, text=True, timeout=20,
+        )
+        raw = r.stdout.strip()
+        if raw and raw.replace(".", "", 1).isdigit():
+            secs = float(raw)
+    except Exception:
+        pass
+
+    # Fallback: --dump-json
+    if secs <= 0:
+        try:
+            r2 = subprocess.run(
+                ["yt-dlp", "--no-playlist", "--dump-json", url],
+                capture_output=True, text=True, timeout=20,
+            )
+            meta = json.loads(r2.stdout.strip().splitlines()[0])
+            secs = float(meta.get("duration", 0))
+        except Exception as e:
+            log.warning(f"RetroTV: duration fetch failed for {video_id}: {e}")
+
+    if secs > 0:
+        with _cache_lock:
+            _duration_cache[video_id] = secs
+
+    return secs
+
+
+def _fetch_durations_bulk(video_ids: list) -> dict:
+    """
+    Fetch durations for all IDs not yet in the cache using up to 6 threads.
+    Saves cache to disk when done. Returns full cache dict.
+    """
+    with _cache_lock:
+        need = [v for v in video_ids if v not in _duration_cache]
+
+    if need:
+        log.info(f"RetroTV: fetching durations for {len(need)} uncached videos…")
+
+    def worker(vid):
+        _fetch_duration(vid)  # result stored inside _duration_cache
+
+    threads = [threading.Thread(target=worker, args=(v,), daemon=True) for v in need]
+    batch_size = 6
+    for i in range(0, len(threads), batch_size):
+        batch = threads[i:i + batch_size]
+        for t in batch:
+            t.start()
+        for t in batch:
+            t.join()
+
+    if need:
+        _save_duration_cache()
+
+    with _cache_lock:
+        return dict(_duration_cache)
+
+
+# ── RetroTV: Shuffle + Broadcast Position ────────────────────────────────────
+
+def _daily_shuffled_playlist(video_ids: list, channel_number: int) -> list:
+    """
+    Shuffle video_ids with a seed = today's date ordinal * 10000 + channel_number.
+    Same channel + same day → same order every time (broadcast consistency).
+    New day → new shuffle (fresh morning lineup).
+    """
+    seed = date.today().toordinal() * 10000 + channel_number
+    rng = random.Random(seed)
+    shuffled = list(video_ids)
+    rng.shuffle(shuffled)
+    return shuffled
+
+
+def _compute_broadcast_position(shuffled_ids: list, durations: dict) -> tuple:
+    """
+    Work out which video in shuffled_ids is "on air" right now and how many
+    seconds into it we are, using midnight today as the broadcast epoch.
+
+    Returns (start_index, seek_seconds, reordered_ids) where reordered_ids
+    starts at the current video and wraps around — ready for an MPV playlist.
+    """
+    valid = [(v, durations.get(v, 0.0)) for v in shuffled_ids if durations.get(v, 0.0) > 0]
+    if not valid:
+        return 0, 0.0, list(shuffled_ids)
+
+    total = sum(d for _, d in valid)
+    if total == 0:
+        return 0, 0.0, list(shuffled_ids)
+
+    # Seconds elapsed since midnight today
+    midnight = datetime.combine(date.today(), datetime.min.time()).timestamp()
+    elapsed = (time.time() - midnight) % total
+
+    start_idx = 0
+    seek = 0.0
+    accumulated = 0.0
+    for idx, (vid, dur) in enumerate(valid):
+        if accumulated + dur > elapsed:
+            start_idx = idx
+            seek = elapsed - accumulated
+            break
+        accumulated += dur
+
+    ids_only = [v for v, _ in valid]
+    reordered = ids_only[start_idx:] + ids_only[:start_idx]
+    return start_idx, seek, reordered
+
+
+def build_retrotv_playlist(channel: dict):
+    """
+    Full pipeline for a retrotv_playlist channel:
+      1. Shuffle the video list with today's daily seed
+      2. Fetch durations (cached after first run)
+      3. Compute which video is on-air right now + seek offset
+      4. Write an MPV .m3u playlist file starting at the current video
+
+    Returns (playlist_path, seek_seconds) or (None, None) on failure.
+    """
+    video_ids = channel.get("playlist", [])
+    if not video_ids:
+        log.warning(f"RetroTV: '{channel['name']}' has no playlist entries")
+        return None, None
+
+    ch_num = channel.get("number", 0)
+
+    # 1. Daily shuffle
+    shuffled = _daily_shuffled_playlist(video_ids, ch_num)
+    log.info(f"RetroTV: '{channel['name']}' — {len(shuffled)} videos shuffled for today")
+
+    # 2. Fetch durations
+    durations = _fetch_durations_bulk(shuffled)
+
+    # 3. Compute on-air position
+    start_idx, seek, reordered = _compute_broadcast_position(shuffled, durations)
+    log.info(
+        f"RetroTV: on-air → video #{start_idx + 1}/{len(reordered)}, "
+        f"seek {seek:.1f}s  (id: {reordered[0] if reordered else '?'})"
+    )
+
+    # 4. Write MPV playlist — current video first, rest follow in order
+    PLAYLIST_DIR.mkdir(parents=True, exist_ok=True)
+    playlist_path = PLAYLIST_DIR / f"retrotv_ch{ch_num}.m3u"
+    with open(playlist_path, "w") as f:
+        f.write("#EXTM3U\n")
+        for vid in reordered:
+            f.write(f"https://www.youtube.com/watch?v={vid}\n")
+
+    return playlist_path, seek
+
+
+# ── Channel Engine ────────────────────────────────────────────────────────────
+
 class ChannelEngine:
     def __init__(self):
-        self.config        = load_json(CONFIG_FILE)
-        self.mpv_process   = None
-        self.current_ch    = None
+        self.config          = load_json(CONFIG_FILE)
+        self.mpv_process     = None
+        self.current_ch      = None
         self.channel_history = []
-        self.retry_count   = 0
-        self.max_retries   = self.config.get("stream_retries", 3)
-        self.retry_delay   = self.config.get("retry_delay_seconds", 5)
-        self._lock         = threading.Lock()
-        self._running      = True
+        self.retry_count     = 0
+        self.max_retries     = self.config.get("stream_retries", 3)
+        self.retry_delay     = self.config.get("retry_delay_seconds", 5)
+        self._lock           = threading.Lock()
+        self._running        = True
         RUNTIME_DIR.mkdir(exist_ok=True)
+        PLAYLIST_DIR.mkdir(exist_ok=True)
+        _load_duration_cache()
         self._write_status(None, "idle")
 
     # ── Channel Data ─────────────────────────────────────────────────────────
@@ -93,7 +301,7 @@ class ChannelEngine:
         return numbers[idx]
 
     # ── MPV Control ──────────────────────────────────────────────────────────
-    def _build_mpv_cmd(self, url):
+    def _build_mpv_cmd(self, url, seek=None):
         cfg = self.config
         cmd = [
             "mpv",
@@ -109,6 +317,8 @@ class ChannelEngine:
             "--stream-lavf-o=reconnect_streamed=1",
             "--stream-lavf-o=reconnect_delay_max=5",
         ]
+        if seek and seek > 1.0:
+            cmd.append(f"--start={seek:.1f}")
         if cfg.get("fullscreen", True):
             cmd.append("--fullscreen")
         if cfg.get("video_output"):
@@ -130,17 +340,16 @@ class ChannelEngine:
 
     def _resolve_url(self, url):
         """Use yt-dlp to resolve non-direct URLs (YouTube Live, Twitch, etc.)"""
-        direct_prefixes = ("http", "rtmp", "rtsp", "udp", "rtp")
-        likely_direct   = any(url.endswith(ext) for ext in (".m3u8", ".ts", ".mp4", ".mpd"))
+        likely_direct = any(url.endswith(ext) for ext in (".m3u8", ".ts", ".mp4", ".mpd"))
         if likely_direct:
             return url
         try:
             result = subprocess.run(
                 ["yt-dlp", "--get-url", "-f", "best[ext=mp4]/best", url],
-                capture_output=True, text=True, timeout=20
+                capture_output=True, text=True, timeout=20,
             )
             resolved = result.stdout.strip().split("\n")[0]
-            if resolved and resolved.startswith(direct_prefixes):
+            if resolved and resolved.startswith(("http", "rtmp", "rtsp")):
                 log.info(f"Resolved URL via yt-dlp: {resolved[:80]}...")
                 return resolved
         except Exception as e:
@@ -148,7 +357,6 @@ class ChannelEngine:
         return url
 
     def _play_no_signal(self):
-        """Show no-signal fallback."""
         self._kill_mpv()
         fallback_url = str(SIGNAL_VIDEO) if SIGNAL_VIDEO.exists() else "color://black"
         cmd = ["mpv", fallback_url, "--loop", "--no-terminal", "--no-osc"]
@@ -160,10 +368,13 @@ class ChannelEngine:
             log.error(f"Could not start fallback player: {e}")
 
     def _monitor_mpv(self, channel_number):
-        """Background thread: watch for MPV crash and retry."""
+        """Watch for MPV exit; retry or re-launch retrotv playlist from new position."""
         while self._running and self.current_ch == channel_number:
             if self.mpv_process and self.mpv_process.poll() is not None:
-                log.warning(f"MPV exited unexpectedly on ch {channel_number}, retry {self.retry_count+1}/{self.max_retries}")
+                log.warning(
+                    f"MPV exited on ch {channel_number}, "
+                    f"retry {self.retry_count + 1}/{self.max_retries}"
+                )
                 self.retry_count += 1
                 if self.retry_count <= self.max_retries:
                     time.sleep(self.retry_delay)
@@ -180,9 +391,50 @@ class ChannelEngine:
 
     def _launch_stream(self, channel, monitor=True):
         self._kill_mpv()
-        url = self._resolve_url(channel["url"])
-        cmd = self._build_mpv_cmd(url)
-        log.info(f"Launching stream: ch {channel['number']} — {channel['name']}")
+
+        is_retrotv = channel.get("type") == "retrotv_playlist"
+
+        if is_retrotv:
+            log.info(f"RetroTV mode: building playlist for '{channel['name']}'")
+            self._write_status(channel["number"], "loading", channel)
+
+            playlist_path, seek = build_retrotv_playlist(channel)
+            if playlist_path is None:
+                log.error("RetroTV: playlist build failed, showing no-signal")
+                self._write_status(channel["number"], "no_signal")
+                self._play_no_signal()
+                return
+
+            # Build MPV command with playlist file
+            cfg = self.config
+            cmd = [
+                "mpv",
+                f"--playlist={playlist_path}",
+                "--no-terminal",
+                "--no-input-default-bindings",
+                f"--volume={cfg.get('volume', 80)}",
+                "--cache=yes",
+                f"--cache-secs={cfg.get('buffer_seconds', 10)}",
+                "--demuxer-max-bytes=50M",
+                "--demuxer-readahead-secs=10",
+                "--stream-lavf-o=reconnect=1",
+                "--stream-lavf-o=reconnect_streamed=1",
+                "--stream-lavf-o=reconnect_delay_max=5",
+            ]
+            if seek and seek > 1.0:
+                cmd.append(f"--start={seek:.1f}")
+            if cfg.get("fullscreen", True):
+                cmd.append("--fullscreen")
+            if cfg.get("video_output"):
+                cmd += [f"--vo={cfg['video_output']}"]
+
+            log.info(f"Launching RetroTV playlist: {playlist_path.name}, seek={seek:.1f}s")
+
+        else:
+            url = self._resolve_url(channel["url"])
+            cmd = self._build_mpv_cmd(url)
+            log.info(f"Launching stream: ch {channel['number']} — {channel['name']}")
+
         try:
             self.mpv_process = subprocess.Popen(
                 cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
@@ -239,7 +491,6 @@ class ChannelEngine:
         level = max(0, min(100, level))
         self.config["volume"] = level
         save_json(CONFIG_FILE, self.config)
-        # Send volume command via MPV's IPC if available
         log.info(f"Volume set to {level}")
         return level
 
@@ -259,6 +510,7 @@ class ChannelEngine:
             "name":       channel_data["name"]     if channel_data else None,
             "category":   channel_data["category"] if channel_data else None,
             "logo":       channel_data.get("logo") if channel_data else None,
+            "type":       channel_data.get("type") if channel_data else None,
             "updated_at": datetime.now().isoformat(),
         }
         save_json(STATUS_FILE, status)
@@ -271,7 +523,6 @@ class ChannelEngine:
 
     # ── Socket Server ─────────────────────────────────────────────────────────
     def run_socket_server(self):
-        """Listen on UNIX socket for control commands from web/hardware."""
         if CONTROL_SOCKET.exists():
             CONTROL_SOCKET.unlink()
         srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -329,7 +580,7 @@ class ChannelEngine:
 
     # ── Main Loop ─────────────────────────────────────────────────────────────
     def run(self):
-        log.info("StreamStation engine starting...")
+        log.info("StreamStation engine starting…")
         channels = self.get_channels()
         if not channels:
             log.warning("No channels configured — add some via the web UI")
@@ -356,7 +607,6 @@ class ChannelEngine:
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
 def send_command(cmd):
-    """Send a command to a running engine via the control socket."""
     if not CONTROL_SOCKET.exists():
         print("ERROR: StreamStation is not running (socket not found)")
         sys.exit(1)
