@@ -1,0 +1,22 @@
+[Unit]
+Description=StreamStation Channel Engine
+After=network.target sound.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/opt/streamstation
+ExecStart=/opt/streamstation/venv/bin/python3 /opt/streamstation/streamstation.py --run
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=streamstation
+
+# Allow GUI/display access
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/pi/.Xauthority
+
+[Install]
+WantedBy=multi-user.target

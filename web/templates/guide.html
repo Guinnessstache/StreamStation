@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StreamStation — TV Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@400;600;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/main.css">
+<link rel="stylesheet" href="/static/css/guide.css">
+</head>
+<body>
+
+<div class="scanlines"></div>
+
+<nav class="topnav">
+  <div class="nav-brand">
+    <span class="brand-icon">📡</span>
+    <span class="brand-name">STREAM<span class="accent">STATION</span></span>
+  </div>
+  <div class="nav-links">
+    <a href="/manage" class="nav-link">MANAGE</a>
+    <a href="/guide"  class="nav-link active">GUIDE</a>
+    <a href="/remote" class="nav-link">REMOTE</a>
+  </div>
+  <div class="nav-status">
+    <div class="status-dot {% if engine_running %}online{% else %}offline{% endif %}"></div>
+    <span class="status-label">
+      {% if status.channel %}▶ CH {{ status.channel }} — {{ status.name }}{% else %}NO SIGNAL{% endif %}
+    </span>
+  </div>
+</nav>
+
+<div class="guide-header">
+  <div class="guide-title-row">
+    <h1 class="guide-title">📺 CHANNEL GUIDE</h1>
+    <div class="guide-clock" id="guideClock">{{ now.strftime('%I:%M %p') }}</div>
+    <div class="guide-date">{{ now.strftime('%A, %B %d') }}</div>
+  </div>
+  <div class="cat-filter-row">
+    <button class="filter-btn active" data-cat="all">ALL</button>
+    {% for cat in categories %}
+    <button class="filter-btn" data-cat="{{ cat }}">{{ cat.upper() }}</button>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="guide-grid-wrap">
+  <table class="guide-grid" id="guideGrid">
+    <thead>
+      <tr>
+        <th class="col-ch">CH</th>
+        <th class="col-name">STATION</th>
+        <th class="col-cat">CATEGORY</th>
+        <th class="col-status">STATUS</th>
+        <th class="col-tune">TUNE</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for ch in channels %}
+      <tr class="guide-row {% if status.channel == ch.number %}on-air{% endif %}"
+          data-cat="{{ ch.category }}"
+          data-num="{{ ch.number }}">
+        <td class="ch-num-cell">
+          <span class="ch-number">{{ ch.number }}</span>
+        </td>
+        <td class="ch-info-cell">
+          <div class="ch-info-wrap">
+            {% if ch.logo %}
+            <img src="{{ ch.logo }}" class="guide-logo" onerror="this.style.display='none'" alt="">
+            {% endif %}
+            <div class="ch-text">
+              <span class="guide-ch-name">{{ ch.name }}</span>
+              {% if ch.notes %}<span class="guide-ch-notes">{{ ch.notes }}</span>{% endif %}
+            </div>
+          </div>
+          {% if status.channel == ch.number %}
+          <span class="on-air-badge">ON AIR</span>
+          {% endif %}
+        </td>
+        <td class="cat-cell">
+          <span class="cat-badge cat-{{ ch.category|lower|replace(' ', '-') }}">{{ ch.category }}</span>
+        </td>
+        <td class="status-cell">
+          <span class="live-indicator">
+            <span class="live-dot"></span>LIVE
+          </span>
+        </td>
+        <td class="tune-cell">
+          <button class="guide-tune-btn" data-num="{{ ch.number }}">TUNE ▶</button>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="empty-guide">NO CHANNELS — ADD SOME IN THE MANAGER</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="guide-footer">
+  <span>AUTO-REFRESHES EVERY 60s</span>
+  <span id="lastRefresh">LAST UPDATE: {{ now.strftime('%H:%M:%S') }}</span>
+</div>
+
+<div class="toast" id="toast"></div>
+<script src="/static/js/guide.js"></script>
+</body>
+</html>

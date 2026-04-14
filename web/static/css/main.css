@@ -1,0 +1,226 @@
+/* ── StreamStation Main CSS ── */
+/* Aesthetic: Industrial CRT terminal — phosphor green on near-black */
+
+:root {
+  --bg:          #0a0c0a;
+  --bg2:         #0f120f;
+  --bg3:         #141814;
+  --surface:     #1a1f1a;
+  --border:      #2a3a2a;
+  --border2:     #1e2e1e;
+  --green:       #39ff14;
+  --green-dim:   #1a8000;
+  --green-glow:  rgba(57, 255, 20, 0.15);
+  --amber:       #ffaa00;
+  --red:         #ff3333;
+  --blue:        #00aaff;
+  --text:        #c8e8c8;
+  --text-dim:    #6a8a6a;
+  --text-muted:  #3a5a3a;
+  --font-mono:   'Share Tech Mono', monospace;
+  --font-ui:     'Barlow Condensed', sans-serif;
+  --radius:      2px;
+  --glow:        0 0 8px rgba(57, 255, 20, 0.4);
+  --glow-strong: 0 0 20px rgba(57, 255, 20, 0.6);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  overflow-x: hidden;
+}
+
+/* ── CRT Scanlines overlay ── */
+.scanlines {
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent 2px,
+    rgba(0,0,0,0.08) 2px,
+    rgba(0,0,0,0.08) 4px
+  );
+}
+
+/* ── Noise grain overlay ── */
+.noise {
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 256px;
+  animation: noiseAnim 0.5s steps(2) infinite;
+}
+@keyframes noiseAnim {
+  0%   { transform: translate(0, 0); }
+  25%  { transform: translate(-2px, 1px); }
+  50%  { transform: translate(1px, -2px); }
+  75%  { transform: translate(2px, 1px); }
+  100% { transform: translate(0, 0); }
+}
+
+/* ── Top Navigation ── */
+.topnav {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 0 24px;
+  height: 52px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 2px 0 var(--green-dim);
+}
+
+.nav-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-ui);
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: 3px;
+  color: var(--green);
+  text-shadow: var(--glow);
+  flex-shrink: 0;
+}
+.brand-icon { font-size: 18px; }
+.accent { color: var(--amber); }
+
+.nav-links {
+  display: flex;
+  gap: 4px;
+}
+.nav-link {
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 2px;
+  color: var(--text-dim);
+  text-decoration: none;
+  padding: 6px 14px;
+  border: 1px solid transparent;
+  transition: all 0.15s;
+}
+.nav-link:hover {
+  color: var(--green);
+  border-color: var(--green-dim);
+}
+.nav-link.active {
+  color: var(--green);
+  border-color: var(--green);
+  background: var(--green-glow);
+  text-shadow: var(--glow);
+}
+
+.nav-status {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--red);
+  flex-shrink: 0;
+}
+.status-dot.online {
+  background: var(--green);
+  box-shadow: var(--glow);
+  animation: pulse 2s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+.status-label {
+  font-family: var(--font-ui);
+  font-weight: 700;
+  letter-spacing: 1px;
+  font-size: 12px;
+}
+.now-playing {
+  color: var(--amber);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 260px;
+}
+
+/* ── Category Badges ── */
+.cat-badge {
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 1px;
+  padding: 2px 8px;
+  border-radius: var(--radius);
+  border: 1px solid;
+  white-space: nowrap;
+}
+.cat-news         { color: #ff6666; border-color: #ff3333; background: rgba(255,51,51,0.1); }
+.cat-sports       { color: #66ff66; border-color: #33ff33; background: rgba(51,255,51,0.1); }
+.cat-entertainment{ color: #ffaa44; border-color: #ff8800; background: rgba(255,136,0,0.1); }
+.cat-weather      { color: #44aaff; border-color: #0088ff; background: rgba(0,136,255,0.1); }
+.cat-local        { color: #cc88ff; border-color: #aa44ff; background: rgba(170,68,255,0.1); }
+.cat-movies       { color: #ffdd44; border-color: #ffcc00; background: rgba(255,204,0,0.1); }
+.cat-kids         { color: #ff88cc; border-color: #ff44aa; background: rgba(255,68,170,0.1); }
+.cat-music        { color: #44ffee; border-color: #00ffcc; background: rgba(0,255,204,0.1); }
+.cat-uncategorized{ color: var(--text-dim); border-color: var(--border); background: transparent; }
+
+/* ── Toast ── */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: var(--surface);
+  border: 1px solid var(--green);
+  color: var(--green);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  padding: 10px 18px;
+  border-radius: var(--radius);
+  box-shadow: var(--glow-strong);
+  z-index: 9990;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: all 0.2s;
+  pointer-events: none;
+}
+.toast.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+.toast.error {
+  border-color: var(--red);
+  color: var(--red);
+  box-shadow: 0 0 20px rgba(255,51,51,0.5);
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar       { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg2); }
+::-webkit-scrollbar-thumb { background: var(--green-dim); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--green); }
+
+/* ── Selection ── */
+::selection { background: var(--green); color: var(--bg); }

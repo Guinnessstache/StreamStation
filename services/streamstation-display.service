@@ -1,0 +1,18 @@
+[Unit]
+Description=StreamStation Hardware Display Driver
+After=streamstation.service
+BindsTo=streamstation.service
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/opt/streamstation
+ExecStart=/opt/streamstation/venv/bin/python3 /opt/streamstation/hardware/display.py
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=streamstation-display
+
+[Install]
+WantedBy=multi-user.target
